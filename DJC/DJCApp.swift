@@ -1,10 +1,3 @@
-//
-//  DJCApp.swift
-//  DJC
-//
-//  Created by Ярослав Сорелля on 01.09.2026.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -12,7 +5,9 @@ import SwiftData
 struct DJCApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Dancer.self,
+            Jam.self,
+            JamGroup.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
