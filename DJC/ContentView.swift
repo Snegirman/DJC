@@ -7,6 +7,8 @@ struct ContentView: View {
     @Query(sort: \Dancer.nickname) private var dancers: [Dancer]
     @Query(sort: \Jam.date, order: .reverse) private var jams: [Jam]
 
+    @AppStorage("lastSuccessfulCSVBackupTimestamp") private var lastSuccessfulCSVBackupTimestamp = 0.0
+
     @State private var selectedStyle: DanceStyle = .popping
     @State private var newDancerName = ""
     @State private var presentDancerIDs = Set<UUID>()
@@ -17,6 +19,8 @@ struct ContentView: View {
     @State private var isHistoryExpanded = false
     @State private var isExportingCSV = false
     @State private var isImportingCSV = false
+    @State private var isConfirmingBackupExport = false
+    @State private var isConfirmingBackupImport = false
     @State private var isConfirmingJamSave = false
     @State private var jamPendingDeletion: Jam?
     @State private var csvDocument = JamCSVDocument()
@@ -36,6 +40,19 @@ struct ContentView: View {
         sortedDancers(dancers.filter { $0.isArchived })
     }
 
+    private var hasLocalData: Bool {
+        !dancers.isEmpty || !jams.isEmpty
+    }
+
+    private var canExportBackup: Bool {
+        !jams.isEmpty
+    }
+
+    private var lastBackupDate: Date? {
+        guard lastSuccessfulCSVBackupTimestamp > 0 else { return nil }
+        return Date(timeIntervalSince1970: lastSuccessfulCSVBackupTimestamp)
+    }
+
     private var csvText: String {
         JamCSVExporter().export(jams: jams)
     }
@@ -50,6 +67,14 @@ struct ContentView: View {
         NavigationStack {
             List {
                 styleSection
+
+                BackupSection(
+                    hasLocalData: hasLocalData,
+                    canExportBackup: canExportBackup,
+                    lastBackupDate: lastBackupDate,
+                    exportBackup: { isConfirmingBackupExport = true },
+                    importBackup: { isConfirmingBackupImport = true }
+                )
 
                 DancerListSection(
                     newDancerName: $newDancerName,
@@ -72,8 +97,6 @@ struct ContentView: View {
                 HistorySection(
                     isExpanded: $isHistoryExpanded,
                     jams: jams,
-                    exportCSV: exportCSV,
-                    importCSV: { isImportingCSV = true },
                     requestDeleteJam: requestDeleteJam
                 )
             }
@@ -90,6 +113,30 @@ struct ContentView: View {
                 Button("OK", role: .cancel) { importResultMessage = nil }
             } message: {
                 Text(importResultMessage ?? "")
+            }
+            .confirmationDialog(
+                "Export backup CSV?",
+                isPresented: $isConfirmingBackupExport,
+                titleVisibility: .visible
+            ) {
+                Button("Export Backup") {
+                    exportCSV()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Keep this CSV somewhere safe so you can restore DJC data after reinstalling the app or moving to another phone.")
+            }
+            .confirmationDialog(
+                "Restore from CSV?",
+                isPresented: $isConfirmingBackupImport,
+                titleVisibility: .visible
+            ) {
+                Button("Import Backup") {
+                    isImportingCSV = true
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Import can add jam history, restore dancers by ID, update existing dancer names, and unarchive matching dancers.")
             }
             .confirmationDialog(
                 "Save this jam to history?",
@@ -125,7 +172,10 @@ struct ContentView: View {
                 contentType: .commaSeparatedText,
                 defaultFilename: csvFilename
             ) { result in
-                if case let .failure(error) = result {
+                switch result {
+                case .success:
+                    lastSuccessfulCSVBackupTimestamp = Date().timeIntervalSince1970
+                case let .failure(error):
                     errorMessage = error.localizedDescription
                 }
             }
