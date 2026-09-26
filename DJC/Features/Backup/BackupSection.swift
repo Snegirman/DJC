@@ -33,6 +33,15 @@ struct BackupSection: View {
             } label: {
                 Label("Restore from CSV", systemImage: "square.and.arrow.down")
             }
+
+            DisclosureGroup("What is in the CSV?") {
+                Text("History is stored on this device. CSV exports saved jams from all styles and their participants, not a full copy of the app.")
+                Text("Each row is one dancer in one group of one jam. Jam IDs repeat across participants; dancer IDs identify the same person across jams. Dates are in UTC.")
+                Text("Open as a UTF-8 table with comma separators. Keep the ID columns for import. Existing jam IDs are skipped, not replaced.")
+                Text("Dancers without saved jams, archive status, attendance selections, and app settings are not included.")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 

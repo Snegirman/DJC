@@ -32,10 +32,24 @@ Each style has its own jam history. When generating new groups, the app only use
 - Keep group sizes as even as possible.
 - Confirm a jam before saving it to local history.
 - View saved jam history with style, date, and group rosters.
+- Record past jams manually with a chosen style, date, time, and group rosters.
 - Delete mistakenly saved jams from history.
 - Export saved jam history as a `.csv` file.
 - Import previously exported CSV backups.
 - Import a CSV backup into an empty app installation.
+
+## Recording a Past Jam
+
+Use **Add Past Jam** above History to record a jam held without the app. Choose
+the style and date/time, then open each group to select its dancers. Add groups
+as needed or swipe left to remove one. Each group needs at least 3 dancers, and
+each dancer can appear only once in the jam; uneven group sizes are allowed.
+
+Archived dancers can be selected without restoring them. Add any missing dancers
+on the main screen first. Save writes the jam to history with the chosen date;
+Cancel discards the draft. The saved jam participates in statistics, CSV backups,
+and future group generation for its style. Existing generated groups are cleared
+after saving so they can be regenerated using the updated history.
 
 ## Group Generation
 
@@ -117,6 +131,14 @@ Archived dancers are hidden from active class attendance, but their saved jam hi
 `Jam` represents one confirmed jam for one style.
 
 `JamGroup` stores the dancers assigned to one group inside a jam.
+Its explicit many-to-many relationship with `Dancer.groups` preserves membership
+when the same dancer participates in later jams. Deleting a jam cascades to its
+groups and removes their links, without deleting the dancers.
+
+`JamMigrationPlan` transfers existing group membership by stable IDs when upgrading
+the original database to the many-to-many schema. `JamSchemaV1` preserves the old
+model definition for this migration. Membership already lost before the upgrade
+cannot be reconstructed automatically.
 
 ## CSV Export
 
@@ -132,7 +154,7 @@ The CSV export includes:
 - dancer first name
 - dancer last name
 
-The format is intentionally row-based: one dancer per CSV row. This is easy to open in Numbers, Excel, or Google Sheets and can later be used for import/backup logic.
+The format is intentionally row-based: one dancer in one group of one jam per CSV row. The app itself stores history in a local SwiftData database; CSV is a portable export for backup/import.
 
 The app exports CSV through the system file exporter with a filename like `djc-jams-2026-09-01.csv`.
 
@@ -141,6 +163,42 @@ The app exports CSV through the system file exporter with a filename like `djc-j
 The app can import CSV files that use the DJC export format. Existing jams with the same jam ID are skipped to avoid duplicate history. Existing dancers with matching dancer IDs are updated and restored if archived; missing dancers are created.
 
 After import, the app reports how many new jams were restored.
+
+### Как читать CSV
+
+Откройте файл как таблицу с кодировкой UTF-8 и разделителем «запятая».
+Одна строка — участие одного танцора в одной группе одного джема.
+Например, джем из двух групп по три человека занимает шесть строк.
+
+| Колонка | Значение |
+| --- | --- |
+| `jam_id` | Постоянный ID джема. Совпадает у всех строк одного джема. |
+| `date` | Время джема в UTC: `2026-09-06T12:00:00Z` — это 15:00 в Москве. |
+| `style` | `popping`, `animation` или `waving`. |
+| `group_index` | Номер группы внутри джема, начиная с 1. |
+| `dancer_id` | Постоянный ID танцора. Не меняется при переименовании. |
+| `dancer_display_name` | Имя, показываемое в приложении на момент экспорта. |
+| `dancer_nickname` | Никнейм. |
+| `dancer_first_name` | Имя из профиля, может быть пустым. |
+| `dancer_last_name` | Фамилия из профиля, может быть пустой. |
+
+Для просмотра удобно скрыть колонки с ID и сгруппировать строки по джему
+и номеру группы. Не удаляйте ID из файла для восстановления: они позволяют
+отличать одноимённых людей и не создавать дубликаты джемов. Дата, стиль и ID
+повторяются в строках намеренно, чтобы каждая строка однозначно описывала участие.
+Запятые, кавычки и переносы строк внутри имени экранируются средствами CSV.
+
+Ограничения текущего экспорта и импорта:
+
+- Экспорт содержит все стили, но только сохранённые джемы и их участников.
+  Люди, которые ещё не участвовали ни в одном сохранённом джеме, не попадают в файл.
+- Это не полная копия приложения: настройки, отметки присутствия, несохранённые
+  группы и статус архива не переносятся.
+- Имена берутся из текущих профилей, а не из снимка профиля на дату занятия.
+- Импорт добавляет только джемы с новыми `jam_id`. Уже имеющийся джем пропускается
+  целиком; его состав не исправляется и профили из его строк не обновляются.
+- Для добавляемых джемов люди сопоставляются по `dancer_id`, их профили обновляются,
+  а архивные участники восстанавливаются. Отсутствующие в файле данные не удаляются.
 
 ## Testing
 

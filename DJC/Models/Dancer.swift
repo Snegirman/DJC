@@ -11,6 +11,7 @@ final class Dancer {
     var lastName: String
     var isArchived: Bool
     var createdAt: Date
+    var groups: [JamGroup] = []
 
     var visibleName: String {
         let trimmedDisplayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var importResultMessage: String?
     @State private var isArchivedDancersExpanded = false
     @State private var isHistoryExpanded = false
+    @State private var isAddingPastJam = false
     @State private var isExportingCSV = false
     @State private var isImportingCSV = false
     @State private var isConfirmingBackupExport = false
@@ -97,6 +98,7 @@ struct ContentView: View {
                 HistorySection(
                     isExpanded: $isHistoryExpanded,
                     jams: jams,
+                    addPastJam: { isAddingPastJam = true },
                     requestDeleteJam: requestDeleteJam
                 )
             }
@@ -196,6 +198,13 @@ struct ContentView: View {
                     cancel: { editingDancer = nil },
                     save: saveDancer,
                     delete: deleteDancer
+                )
+            }
+            .sheet(isPresented: $isAddingPastJam) {
+                ManualJamView(
+                    style: selectedStyle,
+                    dancers: sortedDancers(dancers),
+                    save: savePastJam
                 )
             }
         }
@@ -443,6 +452,12 @@ struct ContentView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func savePastJam(_ draft: ManualJamDraft) throws {
+        try ManualJamRecorder().save(draft, dancers: dancers, in: modelContext)
+        clearGeneratedGroups()
+        isHistoryExpanded = true
     }
 
     private func confirmJam() {

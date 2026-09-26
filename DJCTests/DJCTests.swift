@@ -1,6 +1,100 @@
 import Foundation
+import SwiftData
 import Testing
 @testable import DJC
+
+@MainActor
+struct JamPersistenceTests {
+    @Test(arguments: DanceStyle.allCases)
+    func savingAnotherJamPreservesEarlierParticipants(secondStyle: DanceStyle) throws {
+        let container = try ModelContainer(
+            for: Dancer.self, Jam.self, JamGroup.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let dancers = (1...6).map { Dancer(name: "Dancer \($0)") }
+        for dancer in dancers { context.insert(dancer) }
+        try context.save()
+
+        let first = Jam(style: .popping, groups: [
+            JamGroup(index: 1, dancers: Array(dancers[0...2])),
+            JamGroup(index: 2, dancers: Array(dancers[3...5]))
+        ])
+        context.insert(first)
+        try context.save()
+        let second = Jam(style: secondStyle, groups: [
+            JamGroup(index: 1, dancers: [dancers[0], dancers[2], dancers[4]]),
+            JamGroup(index: 2, dancers: [dancers[1], dancers[3], dancers[5]])
+        ])
+        context.insert(second)
+        try context.save()
+
+        let reader = ModelContext(container)
+        let savedJams = try reader.fetch(FetchDescriptor<Jam>())
+        let savedFirst = try #require(savedJams.first { $0.id == first.id })
+        let savedSecond = try #require(savedJams.first { $0.id == second.id })
+        #expect(Set(savedFirst.groups.first { $0.index == 1 }?.dancers.map(\.id) ?? []) == Set(dancers[0...2].map(\.id)))
+        #expect(Set(savedFirst.groups.first { $0.index == 2 }?.dancers.map(\.id) ?? []) == Set(dancers[3...5].map(\.id)))
+        #expect(savedSecond.groups.flatMap(\.dancers).count == 6)
+        let exported = try JamCSVImporter().importJams(from: JamCSVExporter().export(jams: savedJams))
+        #expect(exported.count == 2)
+        #expect(exported.allSatisfy { $0.groups.flatMap(\.dancers).count == 6 })
+
+        reader.delete(savedSecond)
+        try reader.save()
+        let afterDeletion = ModelContext(container)
+        #expect(try afterDeletion.fetch(FetchDescriptor<Dancer>()).count == 6)
+        #expect(try afterDeletion.fetch(FetchDescriptor<Jam>()).first?.groups.flatMap(\.dancers).count == 6)
+    }
+
+    @Test func upgradesExistingStoreAndPreservesHistoryAfterReopening() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("history.store")
+        let dancerIDs = [UUID(), UUID(), UUID()]
+        let jamID = UUID()
+
+        try autoreleasepool {
+            let container = try ModelContainer(
+                for: JamSchemaV1.Dancer.self, JamSchemaV1.Jam.self, JamSchemaV1.JamGroup.self,
+                configurations: ModelConfiguration(url: url)
+            )
+            let context = ModelContext(container)
+            let dancers = dancerIDs.map { JamSchemaV1.Dancer(id: $0, name: "Dancer") }
+            context.insert(JamSchemaV1.Jam(id: jamID, style: .popping, groups: [
+                JamSchemaV1.JamGroup(index: 1, dancers: dancers)
+            ]))
+            try context.save()
+        }
+
+        try autoreleasepool {
+            let container = try ModelContainer(
+                for: Dancer.self, Jam.self, JamGroup.self,
+                migrationPlan: JamMigrationPlan.self,
+                configurations: ModelConfiguration(url: url)
+            )
+            let context = ModelContext(container)
+            let dancers = try context.fetch(FetchDescriptor<Dancer>())
+            let first = try #require(context.fetch(FetchDescriptor<Jam>()).first)
+            #expect(first.id == jamID)
+            #expect(Set(first.groups.flatMap(\.dancers).map(\.id)) == Set(dancerIDs))
+            context.insert(Jam(style: .popping, groups: [JamGroup(index: 1, dancers: dancers)]))
+            try context.save()
+        }
+
+        try autoreleasepool {
+            let container = try ModelContainer(
+                for: Dancer.self, Jam.self, JamGroup.self,
+                configurations: ModelConfiguration(url: url)
+            )
+            let context = ModelContext(container)
+            let jams = try context.fetch(FetchDescriptor<Jam>())
+            #expect(jams.count == 2)
+            #expect(jams.allSatisfy { Set($0.groups.flatMap(\.dancers).map(\.id)) == Set(dancerIDs) })
+        }
+    }
+}
 
 struct JamOptimizerTests {
     private let optimizer = JamOptimizer()
