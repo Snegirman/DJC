@@ -4,7 +4,7 @@ import SwiftData
 @main
 struct DJCApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: JamSchemaV2.self)
+        let schema = Schema(versionedSchema: JamSchemaV3.self)
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

@@ -32,7 +32,22 @@ struct JamOptimizer {
             score(groups: first, for: input) < score(groups: second, for: input)
         } ?? []
 
-        return JamOptimizerResult(groups: bestGroups)
+        let history = HistorySummary(jams: input.previousJams, style: input.style)
+        let groups = bestGroups.compactMap { group -> GeneratedJamGroup? in
+            let starter = group.min { first, second in
+                let firstCount = history.startCounts[first.id, default: 0]
+                let secondCount = history.startCounts[second.id, default: 0]
+                if firstCount != secondCount {
+                    return firstCount < secondCount
+                }
+                // Keep ties stable across regeneration and dancer renames.
+                return first.id.uuidString < second.id.uuidString
+            }
+            guard let starter else { return nil }
+            return GeneratedJamGroup(dancers: group, startingDancerID: starter.id)
+        }
+
+        return JamOptimizerResult(groups: groups)
     }
 
     func calculateGroupSizes(dancerCount: Int) -> [Int] {
@@ -175,6 +190,7 @@ struct JamOptimizer {
 
 private struct HistorySummary {
     var attendanceCounts: [UUID: Int] = [:]
+    var startCounts: [UUID: Int] = [:]
     var pairs: [DancerPair: PairHistory] = [:]
     var wholeGroups = Set<Set<UUID>>()
 
@@ -184,6 +200,9 @@ private struct HistorySummary {
             .sorted { $0.date > $1.date }
 
         for (jamIndex, jam) in matchingJams.enumerated() {
+            for dancerID in jam.startingDancerIDs {
+                startCounts[dancerID, default: 0] += 1
+            }
             let recencyScore = 1.0 / Double(jamIndex + 1)
             let attendingIDs = Set(jam.groups.flatMap { $0 })
 

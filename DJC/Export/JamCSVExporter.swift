@@ -2,7 +2,7 @@ import Foundation
 
 struct JamCSVExporter {
     func export(jams: [Jam]) -> String {
-        var rows = ["jam_id,date,style,group_index,dancer_id,dancer_display_name,dancer_nickname,dancer_first_name,dancer_last_name"]
+        var rows = ["jam_id,date,style,group_index,dancer_id,dancer_display_name,dancer_nickname,dancer_first_name,dancer_last_name,starts_first"]
         let formatter = ISO8601DateFormatter()
 
         for jam in jams.sorted(by: { $0.date < $1.date }) {
@@ -17,7 +17,8 @@ struct JamCSVExporter {
                         escape(dancer.visibleName),
                         escape(dancer.nickname),
                         escape(dancer.firstName),
-                        escape(dancer.lastName)
+                        escape(dancer.lastName),
+                        String(group.startingDancerID == dancer.id)
                     ].joined(separator: ","))
                 }
             }

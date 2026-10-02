@@ -1,6 +1,6 @@
 import Foundation
 
-struct DancerSnapshot: Identifiable, Hashable {
+struct DancerSnapshot: Identifiable, nonisolated Hashable {
     let id: UUID
     let name: String
 }
@@ -10,6 +10,7 @@ struct JamSnapshot: Identifiable {
     let style: DanceStyle
     let date: Date
     let groups: [[UUID]]
+    var startingDancerIDs: [UUID] = []
 }
 
 struct JamOptimizerInput {

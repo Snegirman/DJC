@@ -1,13 +1,13 @@
 import Foundation
 import SwiftData
 
-enum JamSchemaV2: VersionedSchema {
-    static var versionIdentifier = Schema.Version(2, 0, 0)
+enum JamSchemaV3: VersionedSchema {
+    static var versionIdentifier = Schema.Version(3, 0, 0)
     static var models: [any PersistentModel.Type] { [Dancer.self, Jam.self, JamGroup.self] }
 }
 
 enum JamMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [JamSchemaV1.self, JamSchemaV2.self] }
+    static var schemas: [any VersionedSchema.Type] { [JamSchemaV1.self, JamSchemaV2.self, JamSchemaV3.self] }
 
     static var stages: [MigrationStage] {
         // Changing relationship cardinality does not preserve links automatically.
@@ -22,13 +22,13 @@ enum JamMigrationPlan: SchemaMigrationPlan {
                 }
             },
             didMigrate: { context in
-                let dancers = try context.fetch(FetchDescriptor<Dancer>())
+                let dancers = try context.fetch(FetchDescriptor<JamSchemaV2.Dancer>())
                 let dancerByID = Dictionary(uniqueKeysWithValues: dancers.map { ($0.id, $0) })
-                for group in try context.fetch(FetchDescriptor<JamGroup>()) {
+                for group in try context.fetch(FetchDescriptor<JamSchemaV2.JamGroup>()) {
                     group.dancers = participantsByGroup[group.id, default: []].compactMap { dancerByID[$0] }
                 }
                 try context.save()
             }
-        )]
+        ), .lightweight(fromVersion: JamSchemaV2.self, toVersion: JamSchemaV3.self)]
     }
 }

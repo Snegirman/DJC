@@ -5,6 +5,7 @@ import SwiftData
 final class JamGroup {
     var id: UUID
     var index: Int
+    var startingDancerID: UUID?
     // A dancer can belong to groups in many saved jams.
     @Relationship(deleteRule: .nullify, inverse: \Dancer.groups)
     var dancers: [Dancer]
@@ -14,11 +15,13 @@ final class JamGroup {
         id: UUID = UUID(),
         index: Int,
         dancers: [Dancer] = [],
+        startingDancerID: UUID? = nil,
         jam: Jam? = nil
     ) {
         self.id = id
         self.index = index
         self.dancers = dancers
+        self.startingDancerID = startingDancerID
         self.jam = jam
     }
 }

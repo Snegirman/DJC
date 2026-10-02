@@ -29,6 +29,7 @@ Each style has its own jam history. When generating new groups, the app only use
 - Mark present dancers for a class.
 - Generate jam groups with a minimum group size of 3.
 - Regenerate groups before confirming a jam.
+- Suggest the dancer with the fewest recorded starts in each group and change the starter before saving.
 - Keep group sizes as even as possible.
 - Confirm a jam before saving it to local history.
 - View saved jam history with style, date, and group rosters.
@@ -52,6 +53,16 @@ and future group generation for its style. Existing generated groups are cleared
 after saving so they can be regenerated using the updated history.
 
 ## Group Generation
+
+Each generated group has a **Starts first** picker. The suggestion uses the number
+of saved starts in the selected dance style, across all earlier group compositions.
+Only group members are eligible; ties are resolved by stable dancer ID. You can
+choose any member before confirming. Only the saved choice counts toward future
+starts; regenerating groups does not count. The starter is also marked in history.
+
+Old history and manually recorded past jams have an unknown starter and do not add
+to start counts. Changing styles clears generated groups so the next suggestion
+uses the correct history.
 
 The group generation logic lives outside SwiftUI and SwiftData in `JamOptimizer`.
 
@@ -140,6 +151,9 @@ the original database to the many-to-many schema. `JamSchemaV1` preserves the ol
 model definition for this migration. Membership already lost before the upgrade
 cannot be reconstructed automatically.
 
+`JamSchemaV2` preserves the many-to-many schema before starter tracking. Version 3
+adds an optional `startingDancerID` to each group, leaving it empty in old history.
+
 ## CSV Export
 
 The CSV export includes:
@@ -153,6 +167,7 @@ The CSV export includes:
 - dancer nickname
 - dancer first name
 - dancer last name
+- starts first (`true` for the starter, `false` otherwise; all false when unknown)
 
 The format is intentionally row-based: one dancer in one group of one jam per CSV row. The app itself stores history in a local SwiftData database; CSV is a portable export for backup/import.
 
@@ -163,6 +178,7 @@ The app exports CSV through the system file exporter with a filename like `djc-j
 The app can import CSV files that use the DJC export format. Existing jams with the same jam ID are skipped to avoid duplicate history. Existing dancers with matching dancer IDs are updated and restored if archived; missing dancers are created.
 
 After import, the app reports how many new jams were restored.
+Older CSV files without `starts_first` are still accepted, with unknown starters.
 
 ### Как читать CSV
 
@@ -181,6 +197,7 @@ After import, the app reports how many new jams were restored.
 | `dancer_nickname` | Никнейм. |
 | `dancer_first_name` | Имя из профиля, может быть пустым. |
 | `dancer_last_name` | Фамилия из профиля, может быть пустой. |
+| `starts_first` | `true` у начинающего, `false` у остальных. Если начинающий неизвестен, у всей группы `false`. В старых файлах колонки нет. |
 
 Для просмотра удобно скрыть колонки с ID и сгруппировать строки по джему
 и номеру группы. Не удаляйте ID из файла для восстановления: они позволяют

@@ -12,7 +12,7 @@ struct ContentView: View {
     @State private var selectedStyle: DanceStyle = .popping
     @State private var newDancerName = ""
     @State private var presentDancerIDs = Set<UUID>()
-    @State private var generatedGroups: [[DancerSnapshot]] = []
+    @State private var generatedGroups: [GeneratedJamGroup] = []
     @State private var errorMessage: String?
     @State private var importResultMessage: String?
     @State private var isArchivedDancersExpanded = false
@@ -87,7 +87,7 @@ struct ContentView: View {
                     clearGeneratedGroups: clearGeneratedGroups
                 )
 
-                GeneratedGroupsSection(groups: generatedGroups)
+                GeneratedGroupsSection(groups: $generatedGroups)
 
                 ArchivedDancersSection(
                     isExpanded: $isArchivedDancersExpanded,
@@ -218,6 +218,9 @@ struct ContentView: View {
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: selectedStyle) {
+                clearGeneratedGroups()
+            }
         }
     }
 
@@ -319,9 +322,12 @@ struct ContentView: View {
 
     private func refreshGeneratedGroupName(for dancer: Dancer) {
         generatedGroups = generatedGroups.map { group in
-            group.map { snapshot in
-                snapshot.id == dancer.id ? DancerSnapshot(id: dancer.id, name: dancer.visibleName) : snapshot
-            }
+            GeneratedJamGroup(
+                dancers: group.dancers.map { snapshot in
+                    snapshot.id == dancer.id ? DancerSnapshot(id: dancer.id, name: dancer.visibleName) : snapshot
+                },
+                startingDancerID: group.startingDancerID
+            )
         }
     }
 
@@ -351,6 +357,7 @@ struct ContentView: View {
 
     private func deleteJam(_ jam: Jam) {
         modelContext.delete(jam)
+        clearGeneratedGroups()
         jamPendingDeletion = nil
     }
 
@@ -383,7 +390,8 @@ struct ContentView: View {
                     index: importedGroup.index,
                     dancers: importedGroup.dancers.map { importedDancer in
                         dancer(for: importedDancer, dancerByID: &dancerByID)
-                    }
+                    },
+                    startingDancerID: importedGroup.startingDancerID
                 )
             }
 
@@ -396,6 +404,7 @@ struct ContentView: View {
             importedCount += 1
         }
 
+        clearGeneratedGroups()
         isHistoryExpanded = true
         importResultMessage = importedCount == 0
             ? "No new jams were imported."
@@ -465,8 +474,8 @@ struct ContentView: View {
         var jamGroups: [JamGroup] = []
 
         for (index, group) in generatedGroups.enumerated() {
-            let dancers = group.compactMap { dancerByID[$0.id] }
-            guard dancers.count == group.count else {
+            let dancers = group.dancers.compactMap { dancerByID[$0.id] }
+            guard dancers.count == group.dancers.count else {
                 errorMessage = "Generated groups changed because a dancer is no longer active. Please regenerate groups before saving."
                 clearGeneratedGroups()
                 return
@@ -475,7 +484,8 @@ struct ContentView: View {
             jamGroups.append(
                 JamGroup(
                     index: index + 1,
-                    dancers: dancers
+                    dancers: dancers,
+                    startingDancerID: group.startingDancerID
                 )
             )
         }
@@ -498,7 +508,8 @@ struct ContentView: View {
                     date: jam.date,
                     groups: jam.groups.map { group in
                         group.dancers.map(\.id)
-                    }
+                    },
+                    startingDancerIDs: jam.groups.compactMap(\.startingDancerID)
                 )
             }
     }

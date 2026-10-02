@@ -53,8 +53,16 @@ struct JamHistoryDetailView: View {
                             .font(.headline)
 
                         ForEach(sortedDancers(group.dancers)) { dancer in
-                            Text(dancer.visibleName)
-                                .foregroundStyle(.secondary)
+                            HStack {
+                                Text(dancer.visibleName)
+                                    .foregroundStyle(.secondary)
+                                if dancer.id == group.startingDancerID {
+                                    Spacer()
+                                    Label("Starts first", systemImage: "play.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.tint)
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 4)

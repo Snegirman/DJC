@@ -78,6 +78,7 @@ struct JamPersistenceTests {
             let dancers = try context.fetch(FetchDescriptor<Dancer>())
             let first = try #require(context.fetch(FetchDescriptor<Jam>()).first)
             #expect(first.id == jamID)
+            #expect(first.groups.allSatisfy { $0.startingDancerID == nil })
             #expect(Set(first.groups.flatMap(\.dancers).map(\.id)) == Set(dancerIDs))
             context.insert(Jam(style: .popping, groups: [JamGroup(index: 1, dancers: dancers)]))
             try context.save()
@@ -161,7 +162,7 @@ struct JamOptimizerTests {
         )
 
         let result = try optimizer.generateGroups(for: input)
-        let generatedIDs = result.groups.flatMap { $0.map(\.id) }
+        let generatedIDs = result.groups.flatMap { $0.dancers.map(\.id) }
 
         #expect(Set(generatedIDs) == Set(dancers.map(\.id)))
         #expect(generatedIDs.count == dancers.count)
@@ -177,8 +178,8 @@ struct JamOptimizerTests {
 
             let result = try optimizer.generateGroups(for: input)
 
-            #expect(result.groups.allSatisfy { $0.count >= 3 })
-            #expect(result.groups.flatMap { $0 }.count == dancerCount)
+            #expect(result.groups.allSatisfy { $0.dancers.count >= 3 })
+            #expect(result.groups.flatMap(\.dancers).count == dancerCount)
         }
     }
 
@@ -212,7 +213,7 @@ struct JamOptimizerTests {
         let baselineResult = try baselineOptimizer.generateGroups(for: input)
         let strongerResult = try strongerOptimizer.generateGroups(for: input)
 
-        #expect(strongerOptimizer.score(groups: strongerResult.groups, for: input) <= baselineOptimizer.score(groups: baselineResult.groups, for: input))
+        #expect(strongerOptimizer.score(groups: strongerResult.groups.map(\.dancers), for: input) <= baselineOptimizer.score(groups: baselineResult.groups.map(\.dancers), for: input))
     }
 
     @Test func avoidsRepeatedPairsWhenHistoryAllowsIt() throws {
@@ -235,7 +236,7 @@ struct JamOptimizerTests {
 
         let result = try optimizer.generateGroups(for: input)
 
-        #expect(optimizer.score(groups: result.groups, for: input) == 0)
+        #expect(optimizer.score(groups: result.groups.map(\.dancers), for: input) == 0)
     }
 
     @Test func generateGroupsIgnoresHistoryFromOtherDanceStyles() throws {
@@ -261,8 +262,8 @@ struct JamOptimizerTests {
         let baselineResult = try optimizer.generateGroups(for: baselineInput)
         let resultWithOtherStyleHistory = try optimizer.generateGroups(for: animationHistoryInput)
 
-        #expect(optimizer.score(groups: resultWithOtherStyleHistory.groups, for: animationHistoryInput) == 0)
-        #expect(resultWithOtherStyleHistory.groups.map(\.count) == baselineResult.groups.map(\.count))
+        #expect(optimizer.score(groups: resultWithOtherStyleHistory.groups.map(\.dancers), for: animationHistoryInput) == 0)
+        #expect(resultWithOtherStyleHistory.groups.map { $0.dancers.count } == baselineResult.groups.map { $0.dancers.count })
     }
 
     @Test func ignoresHistoryFromOtherDanceStyles() {

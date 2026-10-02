@@ -10,6 +10,7 @@ struct ImportedJam {
 struct ImportedJamGroup {
     let index: Int
     let dancers: [ImportedDancer]
+    let startingDancerID: UUID?
 }
 
 struct ImportedDancer {
@@ -31,6 +32,8 @@ enum JamCSVImportError: Error, LocalizedError, Equatable {
     case inconsistentJamStyle(Int)
     case invalidGroupIndex(Int)
     case invalidDancerID(Int)
+    case invalidStarterFlag(Int)
+    case multipleStarters(Int)
 
     var errorDescription: String? {
         switch self {
@@ -54,6 +57,10 @@ enum JamCSVImportError: Error, LocalizedError, Equatable {
             "CSV row \(line) has an invalid group index."
         case let .invalidDancerID(line):
             "CSV row \(line) has an invalid dancer ID."
+        case let .invalidStarterFlag(line):
+            "CSV row \(line) must use true or false for starts_first."
+        case let .multipleStarters(line):
+            "CSV row \(line) assigns a second starter to the same group."
         }
     }
 }
@@ -76,7 +83,8 @@ struct JamCSVImporter {
         guard let header = records.first else {
             throw JamCSVImportError.missingHeader
         }
-        guard header == expectedHeader else {
+        let hasStarters = header == expectedHeader + ["starts_first"]
+        guard header == expectedHeader || hasStarters else {
             throw JamCSVImportError.invalidHeader
         }
 
@@ -85,7 +93,7 @@ struct JamCSVImporter {
 
         for (recordIndex, columns) in records.dropFirst().enumerated() {
             let line = recordIndex + 2
-            guard columns.count == expectedHeader.count else {
+            guard columns.count == header.count else {
                 throw JamCSVImportError.invalidRow(line)
             }
 
@@ -103,6 +111,13 @@ struct JamCSVImporter {
             }
             guard let dancerID = UUID(uuidString: columns[4]) else {
                 throw JamCSVImportError.invalidDancerID(line)
+            }
+            var startsFirst = false
+            if hasStarters {
+                guard let value = Bool(columns[9]) else {
+                    throw JamCSVImportError.invalidStarterFlag(line)
+                }
+                startsFirst = value
             }
 
             let dancer = ImportedDancer(
@@ -122,6 +137,12 @@ struct JamCSVImporter {
                 throw JamCSVImportError.inconsistentJamStyle(line)
             }
             builders[jamID]?.groups[groupIndex, default: []].append(dancer)
+            if startsFirst {
+                if let existingStarter = builders[jamID]?.starters[groupIndex], existingStarter != dancerID {
+                    throw JamCSVImportError.multipleStarters(line)
+                }
+                builders[jamID]?.starters[groupIndex] = dancerID
+            }
         }
 
         return order.compactMap { builders[$0]?.build() }
@@ -174,10 +195,11 @@ private struct JamBuilder {
     let date: Date
     let style: DanceStyle
     var groups: [Int: [ImportedDancer]] = [:]
+    var starters: [Int: UUID] = [:]
 
     func build() -> ImportedJam {
         let importedGroups = groups.keys.sorted().map { index in
-            ImportedJamGroup(index: index, dancers: groups[index, default: []])
+            ImportedJamGroup(index: index, dancers: groups[index, default: []], startingDancerID: starters[index])
         }
         return ImportedJam(id: id, date: date, style: style, groups: importedGroups)
     }
